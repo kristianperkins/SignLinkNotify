@@ -1,0 +1,6 @@
+name: SignLinkNotify
+main: com.github.krockode.signs.SignLinkNotify
+version: ${project.version}
+author: krockode
+depend: [SignLink]
+description: ..
