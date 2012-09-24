@@ -1,3 +1,4 @@
 
 variables:
     file_locations: []
+    file_mask: .*\.var

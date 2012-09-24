@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.logging.Level;
+import java.util.regex.Pattern;
 
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -15,6 +16,8 @@ import com.bergerkiller.bukkit.sl.API.Variable;
 import com.bergerkiller.bukkit.sl.API.Variables;
 
 public class SignLinkNotify extends JavaPlugin {
+
+    private static final int ONE_SECOND_TICKS = 20;
 
     private static SignLinkNotify plugin;
     public static SignLinkNotify getPlugin() {
@@ -29,9 +32,10 @@ public class SignLinkNotify extends JavaPlugin {
         getConfig().options().copyDefaults(true);
         this.saveConfig();
         List<String> locations = getConfig().getStringList("variables.file_locations");
+        Pattern fileMask = Pattern.compile(getConfig().getString("variables.file_mask"));
         if (locations != null && !locations.isEmpty()) {
-            VariableChecker updater = new VariableChecker(locations);
-            getServer().getScheduler().scheduleAsyncRepeatingTask(this, updater, 10, 20);
+            VariableChecker updater = new VariableChecker(locations, fileMask);
+            getServer().getScheduler().scheduleAsyncRepeatingTask(this, updater, ONE_SECOND_TICKS, ONE_SECOND_TICKS);
         }
     }
 }
@@ -41,9 +45,11 @@ class VariableChecker implements Runnable {
     private Plugin plugin = SignLinkNotify.getPlugin();
     private List<String> configLocations;
     private Map<String, String> knownVariables = new HashMap<String, String>();
+    private Pattern fileMask;
 
-    public VariableChecker(List<String> fileLocations) {
+    public VariableChecker(List<String> fileLocations, Pattern fileMask) {
         this.configLocations = fileLocations;
+        this.fileMask = fileMask;
     }
 
     public void run() {
@@ -62,10 +68,11 @@ class VariableChecker implements Runnable {
             return updates;
         } else if (location.isDirectory()) {
             for (File file : location.listFiles()) {
-                updates.putAll(readVariables(file));
+                readVariableNotificationFiles(file);
             }
-        } else {
-            readVariables(location);
+        } else if (fileMask.matcher(location.getName()).matches()) {
+            plugin.getLogger().log(Level.FINEST, "reading variables from: " + location.getAbsolutePath());
+            updates.putAll(readVariables(location));
         }
         return updates;
     }
@@ -77,12 +84,15 @@ class VariableChecker implements Runnable {
             s = new Scanner(file);
             while (s.hasNextLine()) {
                 String var = s.nextLine();
-                String name = var.substring(0, var.indexOf(":"));
-                String message = var.substring(var.indexOf(":") + 1);
-                if (!knownVariables.containsKey(name) || !message.equals(knownVariables.get(name))) {
-                    updated.put(name, message);
+                int colonIndex = var.indexOf(":");
+                if (colonIndex > 0) {
+                    String name = var.substring(0, colonIndex);
+                    String message = var.substring(colonIndex + 1);
+                    if (!knownVariables.containsKey(name) || !message.equals(knownVariables.get(name))) {
+                        updated.put(name, message);
+                    }
+                    knownVariables.put(name, message);
                 }
-                knownVariables.put(name, message);
             }
         } catch (Exception e) {
             plugin.getLogger().log(Level.SEVERE, "could not read variable file", e);
@@ -103,7 +113,6 @@ class VariableUpdater implements Runnable {
     public void run() {
         for (String name : variables.keySet()) {
             String message = variables.get(name);
-            System.out.println("updating variable: " + name + " with value " + message);
             Variable v = Variables.get(name);
             v.set(message);
             v.getTicker().interval = 10;
