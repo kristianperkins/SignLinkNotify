@@ -34,8 +34,8 @@ public class SignLinkNotify extends JavaPlugin {
         List<String> locations = getConfig().getStringList("variables.file_locations");
         Pattern fileMask = Pattern.compile(getConfig().getString("variables.file_mask"));
         if (locations != null && !locations.isEmpty()) {
-            VariableChecker updater = new VariableChecker(locations, fileMask);
-            getServer().getScheduler().scheduleAsyncRepeatingTask(this, updater, ONE_SECOND_TICKS, ONE_SECOND_TICKS);
+            VariableChecker checker = new VariableChecker(locations, fileMask);
+            getServer().getScheduler().scheduleAsyncRepeatingTask(this, checker, ONE_SECOND_TICKS, ONE_SECOND_TICKS);
         }
     }
 }
@@ -53,7 +53,7 @@ class VariableChecker implements Runnable {
     }
 
     public void run() {
-        Map<String, String> updated = new HashMap<String, String>();
+        Map<String, VariableUpdateDetails> updated = new HashMap<String, VariableUpdateDetails>();
         for (String location : configLocations) {
             updated.putAll(readVariableNotificationFiles(new File(location)));
         }
@@ -62,8 +62,8 @@ class VariableChecker implements Runnable {
         }
     }
 
-    private Map<String, String> readVariableNotificationFiles(File location) {
-        Map<String, String> updates = new HashMap<String, String>();
+    private Map<String, VariableUpdateDetails> readVariableNotificationFiles(File location) {
+        Map<String, VariableUpdateDetails> updates = new HashMap<String, VariableUpdateDetails>();
         if (!location.canRead()) {
             return updates;
         } else if (location.isDirectory()) {
@@ -77,19 +77,26 @@ class VariableChecker implements Runnable {
         return updates;
     }
 
-    private Map<String, String> readVariables(File file) {
+    private Map<String, VariableUpdateDetails> readVariables(File file) {
         Scanner s = null;
-        Map<String, String> updated = new HashMap<String, String>();
+        Map<String, VariableUpdateDetails> updated = new HashMap<String, VariableUpdateDetails>();
         try {
             s = new Scanner(file);
             while (s.hasNextLine()) {
                 String var = s.nextLine();
                 int colonIndex = var.indexOf(":");
                 if (colonIndex > 0) {
+                    VariableUpdateDetails details = new VariableUpdateDetails();
                     String name = var.substring(0, colonIndex);
+                    if (name.contains("-")) {
+                        TickMode tickMode = TickMode.valueOf(name.substring(name.indexOf("-") + 1));
+                        name = name.substring(0, name.indexOf("-"));
+                        details.setTickMode(tickMode);
+                    }
                     String message = var.substring(colonIndex + 1);
+                    details.setMessage(message);
                     if (!knownVariables.containsKey(name) || !message.equals(knownVariables.get(name))) {
-                        updated.put(name, message);
+                        updated.put(name, details);
                     }
                     knownVariables.put(name, message);
                 }
@@ -105,18 +112,47 @@ class VariableChecker implements Runnable {
 
 class VariableUpdater implements Runnable {
 
-    private Map<String, String> variables;
-    public VariableUpdater(Map<String, String> variables) {
+    private Map<String, VariableUpdateDetails> variables;
+    public VariableUpdater(Map<String, VariableUpdateDetails> variables) {
         this.variables = variables;
     }
 
     public void run() {
         for (String name : variables.keySet()) {
-            String message = variables.get(name);
+            VariableUpdateDetails details = variables.get(name);
             Variable v = Variables.get(name);
-            v.set(message);
-            v.getTicker().interval = 10;
-            v.getTicker().mode = message.length() > 12 ? TickMode.LEFT : TickMode.NONE;
+            v.set(details.getMessage());
+            v.getTicker().interval = details.getInterval();
+            v.getTicker().mode = details.getTickMode();
         }
+    }
+}
+
+class VariableUpdateDetails {
+    private TickMode tickMode;
+    private int interval = 10;
+    private String message;
+
+    public TickMode getTickMode() {
+        if (tickMode != null) {
+            return tickMode;
+        } else {
+            return message.length() > 12 ? TickMode.LEFT : TickMode.NONE;
+        }
+    }
+    public void setTickMode(TickMode tickMode) {
+        this.tickMode = tickMode;
+    }
+    public int getInterval() {
+        return interval;
+    }
+    public void setInterval(int interval) {
+        this.interval = interval;
+    }
+    public String getMessage() {
+        return message;
+    }
+    public void setMessage(String message) {
+        this.message = message;
     }
 }
