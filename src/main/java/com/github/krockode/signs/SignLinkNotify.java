@@ -68,7 +68,7 @@ class VariableChecker implements Runnable {
             return updates;
         } else if (location.isDirectory()) {
             for (File file : location.listFiles()) {
-                readVariableNotificationFiles(file);
+                updates.putAll(readVariableNotificationFiles(file));
             }
         } else if (fileMask.matcher(location.getName()).matches()) {
             plugin.getLogger().log(Level.FINEST, "reading variables from: " + location.getAbsolutePath());
