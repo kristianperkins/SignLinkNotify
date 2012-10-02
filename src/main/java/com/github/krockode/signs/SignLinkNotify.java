@@ -2,11 +2,9 @@ package com.github.krockode.signs;
 
 import java.io.File;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.logging.Level;
-import java.util.regex.Pattern;
 
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -31,10 +29,9 @@ public class SignLinkNotify extends JavaPlugin {
         plugin = this;
         getConfig().options().copyDefaults(true);
         this.saveConfig();
-        List<String> locations = getConfig().getStringList("variables.file_locations");
-        Pattern fileMask = Pattern.compile(getConfig().getString("variables.file_mask"));
-        if (locations != null && !locations.isEmpty()) {
-            VariableChecker checker = new VariableChecker(locations, fileMask);
+        NotifySettings settings = NotifySettings.getInstance(getConfig());
+        if (settings.getLocations() != null && !settings.getLocations().isEmpty()) {
+            VariableChecker checker = new VariableChecker(settings);
             getServer().getScheduler().scheduleAsyncRepeatingTask(this, checker, ONE_SECOND_TICKS, ONE_SECOND_TICKS);
         }
     }
@@ -43,18 +40,16 @@ public class SignLinkNotify extends JavaPlugin {
 class VariableChecker implements Runnable {
 
     private Plugin plugin = SignLinkNotify.getPlugin();
-    private List<String> configLocations;
     private Map<String, String> knownVariables = new HashMap<String, String>();
-    private Pattern fileMask;
+    private NotifySettings settings;
 
-    public VariableChecker(List<String> fileLocations, Pattern fileMask) {
-        this.configLocations = fileLocations;
-        this.fileMask = fileMask;
+    public VariableChecker(NotifySettings settings) {
+        this.settings = settings;
     }
 
     public void run() {
         Map<String, VariableUpdateDetails> updated = new HashMap<String, VariableUpdateDetails>();
-        for (String location : configLocations) {
+        for (String location : settings.getLocations()) {
             updated.putAll(readVariableNotificationFiles(new File(location)));
         }
         if (!updated.isEmpty()) {
@@ -70,7 +65,7 @@ class VariableChecker implements Runnable {
             for (File file : location.listFiles()) {
                 updates.putAll(readVariableNotificationFiles(file));
             }
-        } else if (fileMask.matcher(location.getName()).matches()) {
+        } else if (settings.getFileMask().matcher(location.getName()).matches()) {
             plugin.getLogger().log(Level.FINEST, "reading variables from: " + location.getAbsolutePath());
             updates.putAll(readVariables(location));
         }
