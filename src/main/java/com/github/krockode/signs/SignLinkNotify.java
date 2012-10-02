@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.logging.Level;
 
+import org.bukkit.ChatColor;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -88,7 +89,7 @@ class VariableChecker implements Runnable {
                         name = name.substring(0, name.indexOf("-"));
                         details.setTickMode(tickMode);
                     }
-                    String message = var.substring(colonIndex + 1);
+                    String message = formatMessage(var.substring(colonIndex + 1));
                     details.setMessage(message);
                     if (!knownVariables.containsKey(name) || !message.equals(knownVariables.get(name))) {
                         updated.put(name, details);
@@ -102,6 +103,18 @@ class VariableChecker implements Runnable {
                 s.close();
         }
         return updated;
+    }
+
+    private String formatMessage(final String rawMessage) {
+        String message = rawMessage;
+        for (ChatColor color : ChatColor.values()) {
+            String token = settings.getColourToken() + color.name() + settings.getColourToken();
+            message = message.replace(token, color.toString());
+        }
+        if (!message.equals(rawMessage)) {
+            message += ChatColor.RESET;
+        }
+        return message;
     }
 }
 
